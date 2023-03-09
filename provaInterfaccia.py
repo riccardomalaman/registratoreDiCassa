@@ -1,5 +1,7 @@
 import customtkinter
 import os
+import sys
+sys.path.insert(1, os.path.join(os.getcwd(),"funzioni"))
 from funzioni import leggiMagazzino
 
 class ScrollableLabelButtonFrame(customtkinter.CTkScrollableFrame):
@@ -25,13 +27,13 @@ class ScrollableLabelButtonFrame(customtkinter.CTkScrollableFrame):
         self.label_list.append(label)
 
     def add_pbutton(self, item):
-        button = customtkinter.CTkButton(self, text="+", width=100, height=24)
+        button = customtkinter.CTkButton(self, text="+", width=50, height=24)
         button.configure(command=lambda: self.pFunction(item))
         button.grid(row=len(self.pbutton_list), column=1, pady=(0, 10), padx=5)
         self.pbutton_list.append(button)
 
     def add_mbutton(self, item, command=None):
-        button = customtkinter.CTkButton(self, text="-", width=100, height=24)
+        button = customtkinter.CTkButton(self, text="-", width=50, height=24)
         button.configure(command=lambda: self.mFunction(item))
         button.grid(row=len(self.mbutton_list), column=2, pady=(0, 10), padx=5)
         self.mbutton_list.append(button)
