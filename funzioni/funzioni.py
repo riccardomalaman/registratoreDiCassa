@@ -45,19 +45,56 @@ def aggiornaMagazzino(filePath,qtyList,sellList):
     # Scrivi il nuovo file
     wb.save(filePath)
 
-def incremento(itemName,productList,sellList):
-    # Trova l'indice del prodotto nel dataFrame productList
-    index = productList[productList==itemName].index[0]
-    sellList[index]+=1
-    return sellList
-
-def decremento(itemName,productList,sellList):
-    # Trova l'indice del prodotto nel dataFrame productList
-    index = productList[productList==itemName].index[0]
-    sellList[index]+=-1
-    return sellList
-
-
+# def pFunction(index,storageDict,textBox):
+#         # Read lists from dict
+#         products = storageDict["products"]
+#         sells = storageDict["sells"]
+#         prices = storageDict["prices"]
+#         # Clean resume textbox
+#         textBox.delete("1.0","end")
+#         # Update sellList
+#         sells[index] += 1
+#         # Generate text for the resume textBox
+#         orderText = ""
+#         for product, sell, price in zip(products,sells,prices):
+#             if sell>0:
+#                 orderText += str(sell) + " x " + product.upper() + 7*"\t" + str(price*sell) + "€\n"
+#             elif sell<0:
+#                 # Sells filter: sell must not be lower than 0
+#                 sell==0
+#         textBox.insert("0.0",orderText)
+#         # Update dict
+#         storageDict["sells"]=sells
+#         return storageDict
+    
+def buttonFunction(option,index,storageDict,textBox,resumeBox):
+    # Read lists from dict
+        products = storageDict["products"]
+        sells = storageDict["sells"]
+        prices = storageDict["prices"]
+        # Clean resume textbox
+        textBox.delete("1.0","end")
+        resumeBox.delete("1.0","end")
+        # Update sellList
+        if option == "p":
+            sells[index] += 1
+        elif option == "m":
+            sells[index] += -1    
+        # Generate text for the resume textBox
+        orderText = ""
+        total = 0
+        for product, sell, price in zip(products,sells,prices):
+            if sell>0:
+                orderText += str(sell) + " x " + product.upper() + 7*"\t" + str(price*sell) + "€\n"
+                total = total+sell*price
+            elif sell<0:
+                # Sells filter: sell must not be lower than 0
+                sell==0
+        textBox.insert("0.0",orderText)
+        resumeBox.insert("0.0", "Totale: " + str(total) + " €")
+        # Update dict
+        storageDict["sells"]=sells
+        return storageDict
 
 if __name__ == "__main__":
     filePath=os.path.join(os.getcwd(),"MAGAZZINO.xlsx")
