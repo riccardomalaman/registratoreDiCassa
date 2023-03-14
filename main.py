@@ -34,123 +34,82 @@ from funzioni import leggiMagazzino, buttonFunction
 
 
 ################################# TODO #############################################################
-# - FILTRO SULLO ZERO DELLA SELLLIST
-# - AGGIUNGERE RIGA RESOCONTO ORDINI NEL TEXTBOX
+# - aggiungere funzione per chiudi ordine
 
 
 
 ################################# CLASSI ###########################################################
-class ScrollableLabelButtonFrame(customtkinter.CTkScrollableFrame):
-    
-    def __init__(self, master, command=None, **kwargs):
-        super().__init__(master, **kwargs)
-        self.grid_columnconfigure(0, weight=1)
-
-        self.radiobutton_variable = customtkinter.StringVar()
-        self.label_list = []
-        self.pbutton_list = []
-        self.mbutton_list = []
-
-    def add_label(self, item):
-        label = customtkinter.CTkLabel(self, text=item.upper(), compound="left", padx=5, anchor="w")
-        label.grid(row=len(self.label_list), column=0, pady=(0, 10), sticky="w")
-        self.label_list.append(label)
-
-    def add_pbutton(self, index, storageDict, resumeBox, totalPriceBox):
-        button = customtkinter.CTkButton(self, text="+", width=50, height=24)
-        button.configure(command=lambda: buttonFunction("p",index, storageDict, resumeBox, totalPriceBox))
-        button.grid(row=len(self.pbutton_list), column=1, pady=(0, 10), padx=5)
-        self.pbutton_list.append(button)
-
-    def add_mbutton(self, index, storageDict, resumeBox, totalPriceBox):
-        button = customtkinter.CTkButton(self, text="-", width=50, height=24)
-        button.configure(command=lambda: buttonFunction("m",index, storageDict, resumeBox, totalPriceBox))
-        button.grid(row=len(self.mbutton_list), column=2, pady=(0, 10), padx=5)
-        self.mbutton_list.append(button)
-
-    def remove_item(self, item):
-        for label, button in zip(self.label_list, self.button_list):
-            if item == label.cget("text"):
-                label.destroy()
-                button.destroy()
-                self.label_list.remove(label)
-                self.button_list.remove(button)
-                return
-            
-class resumeFrame(customtkinter.CTkFrame):
-    def __init__(self, master, command=None, **kwargs):
-        super().__init__(master, **kwargs)
-        self.grid_columnconfigure(1, weight=1)
-        self.grid_rowconfigure(1,weight=1)
-        self.radiobutton_variable = customtkinter.StringVar()
-
-    def addButton(self):
-        closeButton = customtkinter.CTkButton(self,text="Chiudi Ordine",width=400,height=50)
-        closeButton.grid(row=0,column=1,sticky="nsew")
-        return closeButton
-
-    def addResumeBox(self):
-        totalPriceBox = customtkinter.CTkTextbox(self,width=400,corner_radius=0)
-        totalPriceBox.grid(row=0,column=0,sticky="nsew")
-        return totalPriceBox
-
-            
-class App(customtkinter.CTk):
-    # Get data
-    path = os.path.join(os.getcwd(),"MAGAZZINO.xlsx")
-    productList, qtyList, priceList = leggiMagazzino(path)
-    sellList = np.zeros(len(qtyList))
-    storageDict = {
-        "products":productList,
-        "prices":priceList,
-        "quantities":qtyList,
-        "sells":sellList
-    }
-
+class App(customtkinter.CTk):  
     def __init__(self):
         super().__init__()
-        current_dir = os.path.dirname(os.path.abspath(__file__))
+        ################################ GET DATA ##################################################
+        path = os.path.join(os.getcwd(),"MAGAZZINO.xlsx")
+        self.productList, self.qtyList, self.priceList = leggiMagazzino(path)
+        self.sellList = np.zeros(len(self.qtyList))
+        self.storageDict = {
+            "products":self.productList,
+            "prices":self.priceList,
+            "quantities":self.qtyList,
+            "sells":self.sellList
+        }
 
-        pad = 3
+        ################################ GUI #######################################################
+        self.font = "consolas"
+
+        # configure window
         self.title("Registratore di cassa")
-        self.geometry("{0}x{1}+0+0".format(
-            self.winfo_screenwidth()-pad, self.winfo_screenheight()-pad))
-        self.grid_rowconfigure(2, weight=1)
-        self.columnconfigure(1, weight=1)
+        self.geometry("1100x580")
 
+        # configure grid layout (3x3)
+        self.grid_columnconfigure((0, 1), weight=1)
+        self.grid_columnconfigure((2, 3), weight=0)
+        self.grid_rowconfigure((0, 1), weight=1)
 
-        self.resumeFrame = resumeFrame(master=self, width=800, height=50, corner_radius=0)
+        # create sidebar with scrollable menu
+        self.scrollable_frame = customtkinter.CTkScrollableFrame(self, width=400)
+        self.scrollable_frame.grid(row=0,column=0,rowspan=3, padx=(10, 10), pady=(10, 10), sticky="nsew")
+        self.scrollable_frame.grid_rowconfigure(3)
+        rowNum = 0
+        for item in self.productList:
+            index = self.productList[self.productList==item].index[0]
+            # label
+            self.add_label(item,rowNum)
+            self.add_button("+",index,rowNum,1)
+            self.add_button("-",index,rowNum,2)
+            rowNum += 1
 
-        # create resume order textbox
-        self.resumeBox = customtkinter.CTkTextbox(master=self, width=800, corner_radius=0)
-        self.resumeBox.grid(row=0, column=1, sticky="nsew")
-
-        # create total price textbox
-        self.totalPriceBox = self.resumeFrame.addResumeBox()
+        # create resume textbox
+        self.order_textbox = customtkinter.CTkTextbox(self, width=1000, height=800, font=(self.font,20))
+        self.order_textbox.grid(row=0, column=1, rowspan=2, columnspan=2, padx=(10, 10), pady=(10, 10))
 
         # create close order button
-        self.closeOrderButton = self.resumeFrame.addButton()
+        self.close_order_button = customtkinter.CTkButton(self,width=200,height=50,text="Chiudi ordine",font=(self.font,20))
+        self.close_order_button.grid(row=2,column=2,padx=(10,10),pady=(10,10))
 
-        # create scrollable label and button frame
-        self.scrollFrame = ScrollableLabelButtonFrame(master=self, width=500, height=750, corner_radius=0)
-        self.scrollFrame.grid(row=0, column=0, padx=0, pady=0, sticky="nsew")
+        # create order total textbox
+        self.total_textbox  =customtkinter.CTkTextbox(self,height=50,font=(self.font,20))
+        self.total_textbox.grid(row=2,column=1,padx=(10, 10), pady=(10, 10), sticky="nsew")
+        self.total_textbox.insert("0.0","Totale: ")
 
-        for item in self.productList:  # add items with images
-            index = self.productList[self.productList==item].index[0]
-            self.scrollFrame.add_label(item)
-            self.scrollFrame.add_pbutton(index,self.storageDict,self.resumeBox,self.totalPriceBox)
-            self.scrollFrame.add_mbutton(index,self.storageDict,self.resumeBox,self.totalPriceBox)
+    ################################ FUNZIONI ##################################################
+    def add_label(self, item, rowNum):
+        label = customtkinter.CTkLabel(self.scrollable_frame, 
+                                        text=item.upper(), 
+                                        compound="right", 
+                                        font=(self.font,14),
+                                        padx=5, 
+                                        anchor="w")
+        label.grid(row=rowNum, column=0, pady=(0, 5), sticky="w")
 
-        
+    def add_button(self, option, index, rowNum, colNum):
+        button = customtkinter.CTkButton(self.scrollable_frame, 
+                                            text=option,
+                                            font=(self.font,14),
+                                            width=50, height=24)
+        button.configure(command=lambda: buttonFunction(option, index, self.storageDict,self.order_textbox,self.total_textbox))
+        button.grid(row=rowNum, column=colNum, pady=(0, 10), padx=5)
 
-        # # create lower buttons
-        # orderEndButton = customtkinter.CTkButton(self, text="Chiudi ordine", width=400, height=50)
-        # orderEndButton.grid(row=1, column=1, pady=(0, 10), padx=5)
 
-if __name__ == "__main__":
-    customtkinter.set_appearance_mode("light")
-    customtkinter.set_default_color_theme("blue")
+if __name__=="__main__":
     app = App()
     app.mainloop()
-
-

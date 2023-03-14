@@ -76,9 +76,9 @@ def buttonFunction(option,index,storageDict,textBox,resumeBox):
         textBox.delete("1.0","end")
         resumeBox.delete("1.0","end")
         # Update sellList
-        if option == "p":
+        if option == "+":
             sells[index] += 1
-        elif option == "m":
+        elif option == "-":
             sells[index] += -1    
         # Generate text for the resume textBox
         orderText = ""
