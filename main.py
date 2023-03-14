@@ -1,14 +1,11 @@
 # REFERENCE
-# - https://www.youtube.com/watch?v=iM3kjbbKHQU
-
-
-
 import customtkinter
 import os
 import sys
 import numpy as np
+import pandas as pd
 sys.path.insert(1, os.path.join(os.getcwd(),"funzioni"))
-from funzioni import leggiMagazzino, buttonFunction
+from funzioni import buttonFunction
 
 ################################# AVVIO INTERFACCIA ################################################
 # 1- Lettura prodotti a magazzino, creazione delle liste prodotto, quantità e prezzo
@@ -34,7 +31,7 @@ from funzioni import leggiMagazzino, buttonFunction
 
 
 ################################# TODO #############################################################
-# - aggiungere funzione per chiudi ordine
+# - aggiungere stampa file di resoconto e totale chiusura cassa quando si preme "x"
 
 
 
@@ -43,15 +40,16 @@ class App(customtkinter.CTk):
     def __init__(self):
         super().__init__()
         ################################ GET DATA ##################################################
-        path = os.path.join(os.getcwd(),"MAGAZZINO.xlsx")
-        self.productList, self.qtyList, self.priceList = leggiMagazzino(path)
-        self.sellList = np.zeros(len(self.qtyList))
+        path = os.path.join(os.getcwd(),"MAGAZZINO.csv")
+        self.df = pd.read_csv(path)
         self.storageDict = {
-            "products":self.productList,
-            "prices":self.priceList,
-            "quantities":self.qtyList,
-            "sells":self.sellList
+            "products":self.df["PRODOTTO"],
+            "prices":np.asarray(self.df["PREZZO UNITARIO"]),
+            "quantities":np.asarray(self.df["QUANTITA"]),
+            "sells":np.zeros(len(self.df["PRODOTTO"])),
+            "orders":np.zeros(len(self.df["PRODOTTO"]))
         }
+        self.productList = self.storageDict["products"]
 
         ################################ GUI #######################################################
         self.font = "consolas"
@@ -84,12 +82,18 @@ class App(customtkinter.CTk):
 
         # create close order button
         self.close_order_button = customtkinter.CTkButton(self,width=200,height=50,text="Chiudi ordine",font=(self.font,20))
+        self.close_order_button.configure(
+            command=lambda:self.close_order_function(path)
+        )
         self.close_order_button.grid(row=2,column=2,padx=(10,10),pady=(10,10))
 
         # create order total textbox
         self.total_textbox  =customtkinter.CTkTextbox(self,height=50,font=(self.font,20))
         self.total_textbox.grid(row=2,column=1,padx=(10, 10), pady=(10, 10), sticky="nsew")
         self.total_textbox.insert("0.0","Totale: ")
+
+        # close button
+        self.protocol("WM_DELETE_WINDOW",self.on_closing)
 
     ################################ FUNZIONI ##################################################
     def add_label(self, item, rowNum):
@@ -109,6 +113,25 @@ class App(customtkinter.CTk):
         button.configure(command=lambda: buttonFunction(option, index, self.storageDict,self.order_textbox,self.total_textbox))
         button.grid(row=rowNum, column=colNum, pady=(0, 10), padx=5)
 
+    def close_order_function(self,path):
+        # Filter negative order values
+        self.storageDict["orders"][self.storageDict["orders"]<0]=0      
+        # Update "MAGAZZINO.xlsx"
+        self.df["QUANTITA"] = self.storageDict["quantities"]-self.storageDict["orders"]
+        self.df.to_csv(path)
+        print("MAGAZZINO updated")
+        # Update sellList
+        self.storageDict["sells"] += self.storageDict["orders"]
+        # Clear orderList
+        self.storageDict["orders"] = np.zeros(len(self.storageDict["sells"]))
+        # Clear order_box
+        self.order_textbox.delete("1.0","end")
+        # Clear total_box
+        self.total_textbox.delete("1.0","end")
+        self.total_textbox.insert("0.0","Totale: ")
+    def on_closing(self):
+        print("chiuso")
+        self.destroy()
 
 if __name__=="__main__":
     app = App()
