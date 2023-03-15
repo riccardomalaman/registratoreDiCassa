@@ -1,11 +1,12 @@
 # REFERENCE
 import customtkinter
+from tkinter import messagebox
 import os
 import sys
 import numpy as np
 import pandas as pd
 sys.path.insert(1, os.path.join(os.getcwd(),"funzioni"))
-from funzioni import buttonFunction
+from datetime import date
 
 ################################# AVVIO INTERFACCIA ################################################
 # 1- Lettura prodotti a magazzino, creazione delle liste prodotto, quantità e prezzo
@@ -29,19 +30,17 @@ from funzioni import buttonFunction
 # PULSANTE X INTERFACCIA: - incolla il nuovo valore delle quantità all'interno dell'excel magazzino
 #                         - aggiorna il file "REGISTRO_VENDITE" con il venduto della serata
 
-
-################################# TODO #############################################################
-# - aggiungere stampa file di resoconto e totale chiusura cassa quando si preme "x"
-
-
-
 ################################# CLASSI ###########################################################
 class App(customtkinter.CTk):  
     def __init__(self):
         super().__init__()
         ################################ GET DATA ##################################################
-        path = os.path.join(os.getcwd(),"MAGAZZINO.csv")
-        self.df = pd.read_csv(path)
+        self.mainPath = os.getcwd()
+        self.magPath = os.path.join(os.getcwd(),"MAGAZZINO.csv")
+        self.incPath = os.path.join(os.getcwd(),"INCASSI.csv")
+        self.today = date.today().strftime("%d/%m/%Y")
+        # Magazzino
+        self.df = pd.read_csv(self.magPath)
         self.storageDict = {
             "products":self.df["PRODOTTO"],
             "prices":np.asarray(self.df["PREZZO UNITARIO"]),
@@ -50,6 +49,9 @@ class App(customtkinter.CTk):
             "orders":np.zeros(len(self.df["PRODOTTO"]))
         }
         self.productList = self.storageDict["products"]
+        ################################ CREATE ENV ################################################
+        if not os.path.exists(os.path.join(self.mainPath,"STORICO")):
+            os.mkdir(os.path.join(self.mainPath,"STORICO"))
 
         ################################ GUI #######################################################
         self.font = "consolas"
@@ -83,7 +85,7 @@ class App(customtkinter.CTk):
         # create close order button
         self.close_order_button = customtkinter.CTkButton(self,width=200,height=50,text="Chiudi ordine",font=(self.font,20))
         self.close_order_button.configure(
-            command=lambda:self.close_order_function(path)
+            command=lambda:self.close_order_function()
         )
         self.close_order_button.grid(row=2,column=2,padx=(10,10),pady=(10,10))
 
@@ -94,6 +96,8 @@ class App(customtkinter.CTk):
 
         # close button
         self.protocol("WM_DELETE_WINDOW",self.on_closing)
+
+        
 
     ################################ FUNZIONI ##################################################
     def add_label(self, item, rowNum):
@@ -110,15 +114,46 @@ class App(customtkinter.CTk):
                                             text=option,
                                             font=(self.font,14),
                                             width=50, height=24)
-        button.configure(command=lambda: buttonFunction(option, index, self.storageDict,self.order_textbox,self.total_textbox))
+        # button.configure(command=lambda: buttonFunction(option, index, self.storageDict,self.order_textbox,self.total_textbox))
+        button.configure(command=lambda: self.buttonFunction(option,index))
         button.grid(row=rowNum, column=colNum, pady=(0, 10), padx=5)
+    
+    def buttonFunction(self,option,index):
+    # Read lists from dict
+        products = self.storageDict["products"]
+        sells = self.storageDict["orders"]
+        prices = self.storageDict["prices"]
+        quantities = self.storageDict["quantities"]
+        quantity = quantities[index]
+        if quantity > 0:
+            # Clean resume textbox
+            self.order_textbox.delete("1.0","end")
+            self.total_textbox.delete("1.0","end")
+            # Update sellList
+            if option == "+":
+                sells[index] += 1
+            elif option == "-":
+                sells[index] += -1    
+            # Generate text for the resume textBox
+            orderText = ""
+            total = 0
+            for product, sell, price in zip(products,sells,prices):
+                if sell>0:
+                    orderText += str(sell) + " x " + product.upper() + 7*"\t" + str(price*sell) + " €\n"
+                    total = total+sell*price
+            self.order_textbox.insert("0.0",orderText)
+            self.total_textbox.insert("0.0", "Totale: " + str(total) + " €")
+        else:
+            messagebox.showerror(title="Errore magazzino",message="Prodotto non disponibile")
+        # Update dict
+        self.storageDict["orders"]=sells
 
-    def close_order_function(self,path):
+    def close_order_function(self):
         # Filter negative order values
         self.storageDict["orders"][self.storageDict["orders"]<0]=0      
         # Update "MAGAZZINO.xlsx"
         self.df["QUANTITA"] = self.storageDict["quantities"]-self.storageDict["orders"]
-        self.df.to_csv(path)
+        self.df.to_csv(self.magPath,index=False)
         print("MAGAZZINO updated")
         # Update sellList
         self.storageDict["sells"] += self.storageDict["orders"]
@@ -129,8 +164,34 @@ class App(customtkinter.CTk):
         # Clear total_box
         self.total_textbox.delete("1.0","end")
         self.total_textbox.insert("0.0","Totale: ")
+
     def on_closing(self):
-        print("chiuso")
+        # Update INCASSI.csv
+        incassi = pd.read_csv(self.incPath)
+        revenue = 0
+        for sell,price in zip(self.storageDict["sells"],self.storageDict["prices"]):
+            revenue += sell*price
+        print(revenue)
+        if self.today not in list(incassi["DATA"]):
+            newRow = pd.DataFrame({"DATA":self.today,"INCASSO (€)":revenue},index=[0])
+            incassi = pd.concat([incassi,newRow])
+        else:
+            index = incassi[incassi["DATA"]==self.today].index[0]
+            incassi.at[index,"INCASSO (€)"] += revenue
+        incassi.to_csv(self.incPath,index=False)
+        # Create summary file
+        with open(os.path.join(self.mainPath,"STORICO",date.today().strftime("%Y%m%d")+".txt"),"w") as f:
+            f.write("DATA:\t"+self.today+"\n\n")
+            tot = 0
+            for product, price, sell in zip(self.storageDict["products"],self.storageDict["prices"],self.storageDict["sells"]):
+                strLen = 50
+                if sell>0:
+                    t1 = str(sell) + " x " + product.upper()
+                    t3 = str(price*sell) + " €\n"
+                    t2 = (strLen-len(t1)-len(t3))*" "
+                    f.write(t1+t2+t3)
+                tot += sell*price
+            f.write("\n\nTotale:\t"+str(tot)+" €")
         self.destroy()
 
 if __name__=="__main__":
