@@ -8,6 +8,10 @@ import pandas as pd
 sys.path.insert(1, os.path.join(os.getcwd(),"funzioni"))
 from datetime import date
 
+import gspread
+from oauth2client.service_account import ServiceAccountCredentials
+import pandas as pd
+
 ################################# AVVIO INTERFACCIA ################################################
 # 1- Lettura prodotti a magazzino, creazione delle liste prodotto, quantità e prezzo
 # 2- Creazione array sell per tener conto della quantità di prodotti venduti
@@ -34,13 +38,33 @@ from datetime import date
 class App(customtkinter.CTk):  
     def __init__(self):
         super().__init__()
-        ################################ GET DATA ##################################################
+        data = "local"
         self.mainPath = os.getcwd()
-        self.magPath = os.path.join(os.getcwd(),"MAGAZZINO.csv")
-        self.incPath = os.path.join(os.getcwd(),"INCASSI.csv")
-        self.today = date.today().strftime("%d/%m/%Y")
-        # Magazzino
-        self.df = pd.read_csv(self.magPath)
+        ################################ GET DATA ##################################################
+        if data == "local":
+            self.mainPath = os.getcwd()
+            self.magPath = os.path.join(os.getcwd(),"MAGAZZINO.csv")
+            self.incPath = os.path.join(os.getcwd(),"INCASSI.csv")
+            self.today = date.today().strftime("%d/%m/%Y")
+            # Magazzino
+            self.df = pd.read_csv(self.magPath)
+        elif data == "cloud":
+            # define the scope
+            scope = ['https://spreadsheets.google.com/feeds','https://www.googleapis.com/auth/drive']
+            # add credentials to the account
+            creds = ServiceAccountCredentials.from_json_keyfile_name('DriveCredentials\\keys.json', scope)
+            # authorize the clientsheet 
+            client = gspread.authorize(creds)
+            # get the instance of the Spreadsheet
+            sheet = client.open('MAGAZZINO')
+            # get the first sheet of the Spreadsheet
+            sheet_instance = sheet.get_worksheet(0)
+            # get all the records of the data
+            records_data = sheet_instance.get_all_records()
+            self.df = pd.DataFrame.from_dict(records_data)
+
+
+    
         self.storageDict = {
             "products":self.df["PRODOTTO"],
             "prices":np.asarray(self.df["PREZZO UNITARIO"]),
