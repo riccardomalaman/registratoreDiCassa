@@ -5,12 +5,8 @@ import os
 import sys
 import numpy as np
 import pandas as pd
-sys.path.insert(1, os.path.join(os.getcwd(),"funzioni"))
+sys.path.insert(1, os.path.join(os.getcwd(),"Drive"))
 from datetime import date
-
-import gspread
-from oauth2client.service_account import ServiceAccountCredentials
-import pandas as pd
 
 ################################# AVVIO INTERFACCIA ################################################
 # 1- Lettura prodotti a magazzino, creazione delle liste prodotto, quantità e prezzo
@@ -38,33 +34,15 @@ import pandas as pd
 class App(customtkinter.CTk):  
     def __init__(self):
         super().__init__()
-        data = "local"
         self.mainPath = os.getcwd()
+        self.today = date.today().strftime("%d/%m/%Y")
         ################################ GET DATA ##################################################
-        if data == "local":
-            self.mainPath = os.getcwd()
-            self.magPath = os.path.join(os.getcwd(),"MAGAZZINO.csv")
-            self.incPath = os.path.join(os.getcwd(),"INCASSI.csv")
-            self.today = date.today().strftime("%d/%m/%Y")
-            # Magazzino
-            self.df = pd.read_csv(self.magPath)
-        elif data == "cloud":
-            # define the scope
-            scope = ['https://spreadsheets.google.com/feeds','https://www.googleapis.com/auth/drive']
-            # add credentials to the account
-            creds = ServiceAccountCredentials.from_json_keyfile_name('DriveCredentials\\keys.json', scope)
-            # authorize the clientsheet 
-            client = gspread.authorize(creds)
-            # get the instance of the Spreadsheet
-            sheet = client.open('MAGAZZINO')
-            # get the first sheet of the Spreadsheet
-            sheet_instance = sheet.get_worksheet(0)
-            # get all the records of the data
-            records_data = sheet_instance.get_all_records()
-            self.df = pd.DataFrame.from_dict(records_data)
-
-
-    
+        self.mainPath = os.getcwd()
+        self.magPath = os.path.join(os.getcwd(),"tmp\\MAGAZZINO.csv")
+        self.incPath = os.path.join(os.getcwd(),"tmp\\INCASSI.csv")
+        self.resPath = os.path.join(os.getcwd(),"STORICO")
+        # Magazzino
+        self.df = pd.read_csv(self.magPath)
         self.storageDict = {
             "products":self.df["PRODOTTO"],
             "prices":np.asarray(self.df["PREZZO UNITARIO"]),
@@ -73,9 +51,20 @@ class App(customtkinter.CTk):
             "orders":np.zeros(len(self.df["PRODOTTO"]))
         }
         self.productList = self.storageDict["products"]
-        ################################ CREATE ENV ################################################
-        if not os.path.exists(os.path.join(self.mainPath,"STORICO")):
-            os.mkdir(os.path.join(self.mainPath,"STORICO"))
+        # Incassi
+        self.incassi = pd.read_csv(self.incPath)
+        # Filename storico
+        inFileName = os.path.join(self.resPath,date.today().strftime("%Y%m%d")+".txt")
+        self.fileName = inFileName
+        boolCond=False
+        counter=1
+        while boolCond==False:
+            if os.path.exists(inFileName):
+                self.fileName=os.path.join(self.resPath,date.today().strftime("%Y%m%d")+"_"+str(counter)+".txt")
+                counter+=1
+                inFileName=self.fileName
+            else:
+                boolCond=True
 
         ################################ GUI #######################################################
         self.font = "consolas"
@@ -120,8 +109,6 @@ class App(customtkinter.CTk):
 
         # close button
         self.protocol("WM_DELETE_WINDOW",self.on_closing)
-
-        
 
     ################################ FUNZIONI ##################################################
     def add_label(self, item, rowNum):
@@ -175,9 +162,11 @@ class App(customtkinter.CTk):
     def close_order_function(self):
         # Filter negative order values
         self.storageDict["orders"][self.storageDict["orders"]<0]=0      
-        # Update "MAGAZZINO.xlsx"
+        # Update "MAGAZZINO.csv"
         self.df["QUANTITA"] = self.storageDict["quantities"]-self.storageDict["orders"]
+        self.storageDict["quantities"] = self.df["QUANTITA"]
         self.df.to_csv(self.magPath,index=False)
+    
         print("MAGAZZINO updated")
         # Update sellList
         self.storageDict["sells"] += self.storageDict["orders"]
@@ -190,34 +179,84 @@ class App(customtkinter.CTk):
         self.total_textbox.insert("0.0","Totale: ")
 
     def on_closing(self):
-        # Update INCASSI.csv
-        incassi = pd.read_csv(self.incPath)
+        # Update self.incassi.csv
         revenue = 0
         for sell,price in zip(self.storageDict["sells"],self.storageDict["prices"]):
             revenue += sell*price
-        print(revenue)
-        if self.today not in list(incassi["DATA"]):
-            newRow = pd.DataFrame({"DATA":self.today,"INCASSO (€)":revenue},index=[0])
-            incassi = pd.concat([incassi,newRow])
+        revenue = round(revenue,2)
+        if self.today not in list(self.incassi["DATA"]):
+            revenue = str(revenue)
+            revenue = revenue.replace(".",",")
+            revenue = "€ "+revenue
+            newRow = pd.DataFrame({"DATA":self.today,"VENDITE":revenue},index=[0])
+            self.incassi = pd.concat([self.incassi,newRow])
         else:
-            index = incassi[incassi["DATA"]==self.today].index[0]
-            incassi.at[index,"INCASSO (€)"] += revenue
-        incassi.to_csv(self.incPath,index=False)
+            index = self.incassi[self.incassi["DATA"]==self.today].index[0]
+            # from € to number
+            value = self.incassi.at[index,"VENDITE"]
+            value = value.replace("€ ","")
+            value = value.replace(",",".")
+            value = float(value)
+            value += revenue
+            # from number to €
+            value = str(value)
+            value = value.replace(".",",")
+            value = "€ "+value
+            self.incassi.at[index,"VENDITE"] = value
+        self.incassi.to_csv(self.incPath,index=False)
         # Create summary file
-        with open(os.path.join(self.mainPath,"STORICO",date.today().strftime("%Y%m%d")+".txt"),"w") as f:
+        with open(self.fileName,"w") as f:
             f.write("DATA:\t"+self.today+"\n\n")
             tot = 0
             for product, price, sell in zip(self.storageDict["products"],self.storageDict["prices"],self.storageDict["sells"]):
                 strLen = 50
                 if sell>0:
                     t1 = str(sell) + " x " + product.upper()
-                    t3 = str(price*sell) + " €\n"
+                    t3 = str(round(price*sell,2)) + " €\n"
                     t2 = (strLen-len(t1)-len(t3))*" "
                     f.write(t1+t2+t3)
                 tot += sell*price
-            f.write("\n\nTotale:\t"+str(tot)+" €")
-        self.destroy()
+            f.write("\n"+strLen*"-"+"\n")   
+            t1="Totale:"
+            t3=str(round(tot,2))+" €\n"
+            t2 = (strLen-len(t1)-len(t3))*" "
+            f.write(t1+t2+t3)
+        answer = messagebox.askokcancel("Chiudi Cassa","Sei sicuro di voler chiudere la cassa?")
+        if answer:
+            self.destroy()
 
 if __name__=="__main__":
+    mainPath = os.getcwd()
+
+    os.chdir(mainPath+"\\Drive")
+    # CREATE ENVIRONMENT
+    # Download data from Gdrive and store it into temporary files MAGAZZINO.csv and INCASSI.csv
+    from Drive.Gdrive_utilities import read
+    if not os.path.exists(os.path.join(mainPath,"STORICO")):
+        os.mkdir(os.path.join(mainPath,"STORICO"))
+    if not os.path.exists(os.path.join(mainPath,"tmp")):
+        os.mkdir(os.path.join(mainPath,"tmp"))
+
+    read(magPath=os.path.join(mainPath,"tmp","MAGAZZINO.csv"),
+            incPath=os.path.join(mainPath,"tmp","INCASSI.csv"))
+
+    os.chdir(mainPath)
+    # RUN GUI
+    # Run the graphical user interface with temporary files stored into the folder
     app = App()
     app.mainloop()
+
+    os.chdir(mainPath+"\\Drive")
+    # CLOSE APPLICATION
+    # Run the Updload function and store all the modified files into the shared worksheet located into the Gdrive folder 
+    from Drive.Gdrive_utilities import write
+    write(magPath=os.path.join(mainPath,"tmp","MAGAZZINO.csv"),
+        incPath=os.path.join(mainPath,"tmp","INCASSI.csv"))
+    from Drive.Gdrive_utilities import upload
+    upload(filePath=os.path.join(mainPath,"STORICO"))
+
+    # CLEAR TEMPORARY FOLDERS
+    import shutil
+    shutil.rmtree(os.path.join(mainPath,"STORICO"))
+    shutil.rmtree(os.path.join(mainPath,"tmp"))
+    

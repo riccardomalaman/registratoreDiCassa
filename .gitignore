@@ -1,4 +1,6 @@
 # ignore all the .xlsx files
 *.xlsx
 oldFiles/*
-DriveCredentials/*
+Drive/*
+tmp/*
+STORICO/*
